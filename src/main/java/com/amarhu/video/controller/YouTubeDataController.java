@@ -18,11 +18,14 @@ public class YouTubeDataController {
     @Autowired
     private YouTubeDataService youTubeDataService;
 
+    /**
+     * Endpoint para procesar datos de YouTube (Data + Analytics).
+     */
     @GetMapping("/process")
     public ResponseEntity<String> processYouTubeData() {
         try {
             youTubeDataService.processYouTubeData();
-            return ResponseEntity.ok("YouTube data processed successfully.");
+            return ResponseEntity.ok("Datos de YouTube procesados correctamente.");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
         }

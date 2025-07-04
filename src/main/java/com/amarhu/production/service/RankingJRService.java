@@ -23,12 +23,11 @@ public class RankingJRService {
 
     public List<RankingJRDTO> getRankingJRs() {
         // Obtener usuarios con rol Jefe de Redacción y código "JR"
-        List<User> jrs = userRepository.findByRoleAndCodigo(Role.JEFE_REDACCION, "JR");
+        List<User> jrs = userRepository.findByRoleAndCodigoStartingWith(Role.JEFE_REDACCION, "JR");
 
         // Crear el ranking basado en la producción personal obtenida por cada JR
         return jrs.stream()
                 .map(jr -> {
-                    // Obtener la producción del JR usando el servicio de producción personal
                     PersonalProductionDTO productionDTO = personalProductionService.getPersonalProduction(jr.getId());
 
                     return new RankingJRDTO(
@@ -36,13 +35,14 @@ public class RankingJRService {
                             jr.getName(),
                             productionDTO.getVideosTotales(),
                             productionDTO.getVideosCaidos(),
-                            productionDTO.getGananciaTotal(),
-                            productionDTO.getComisionDolares(), // Comisiones netas en dólares
-                            BigDecimal.ZERO, // Ajustable si se necesita otro cálculo
-                            BigDecimal.ZERO  // Ajustable si se necesita otro cálculo
+                            productionDTO.getGananciaTotal() != null ? productionDTO.getGananciaTotal() : BigDecimal.ZERO,
+                            productionDTO.getComisionDolares() != null ? productionDTO.getComisionDolares() : BigDecimal.ZERO, // <--- este es tu "gananciaNeta"
+                            BigDecimal.ZERO,
+                            BigDecimal.ZERO
                     );
                 })
-                .sorted((a, b) -> Integer.compare(b.getTotalVideos(), a.getTotalVideos())) // Ordenar por total de videos descendente
+                .sorted((a, b) -> Integer.compare(b.getTotalVideos(), a.getTotalVideos()))
                 .collect(Collectors.toList());
+
     }
 }

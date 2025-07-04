@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -25,7 +28,7 @@ public class PaymentsService {
     private VideoRepository videoRepository;
 
     private static final BigDecimal REDACTOR_PERCENTAGE = BigDecimal.valueOf(16.6452);
-    private static final BigDecimal EXCHANGE_RATE = BigDecimal.valueOf(3.72); // Tipo de cambio ejemplo
+    private static final BigDecimal EXCHANGE_RATE = BigDecimal.valueOf(3.62); // Tipo de cambio ejemplo
     private static final BigDecimal MINIMUM_REVENUE = BigDecimal.valueOf(10.0); // Límite para videos caídos
 
     public List<PaymentDTO> getAllPayments() {
@@ -45,6 +48,10 @@ public class PaymentsService {
                             return calculateJefeEntrevistasPayment(worker);
                         case PANELISTA:
                             return calculatePanelistaPayment(worker);
+                        case LOCUTOR:
+                            return calculatePagoFijo(worker);
+                        case EDITOR:
+                            return calculatePagoFijo(worker);
                         default:
                             throw new RuntimeException("El rol " + worker.getRole() + " aún no tiene fórmula de pago implementada.");
                     }
@@ -52,9 +59,53 @@ public class PaymentsService {
                 .collect(Collectors.toList());
     }
 
+    private PaymentDTO calculatePagoFijo(User worker) {
+        // Fórmula temporal → 1200 soles convertidos a dólares
+        BigDecimal pagoFijoDolares = BigDecimal.valueOf(1200).divide(EXCHANGE_RATE, RoundingMode.HALF_UP);
+        BigDecimal pagoFijoSoles = BigDecimal.valueOf(1200);
+
+        return new PaymentDTO(
+                UUID.randomUUID().toString(),
+                worker.getCodigo(),
+                worker.getName(),
+                0, // videosTotales
+                0, // videosCaidos
+                BigDecimal.ZERO, // gananciaTotal
+                BigDecimal.ZERO, // gananciaMenosImpuestos
+                BigDecimal.ZERO, // gananciaDespuesCaidos
+                pagoFijoDolares, // comisión en dólares
+                pagoFijoSoles    // comisión en soles
+        );
+    }
+
+    private List<Video> filtrarVideosPorReglaDePago(List<Video> videos) {
+        LocalDate hoy = LocalDate.now();
+        LocalDate inicioMesActual = hoy.withDayOfMonth(1);
+        LocalDate inicioMesAnterior = inicioMesActual.minusMonths(1);
+        LocalDate finMesAnterior = inicioMesActual.minusDays(1);
+
+        return videos.stream()
+                .filter(video -> {
+                    LocalDate fechaVideo = Instant.parse(video.getDate())
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate();
+                    if (hoy.getDayOfMonth() <= 7) {
+                        // Del 1 al 7: se consideran videos del mes pasado
+                        return !fechaVideo.isBefore(inicioMesAnterior) && !fechaVideo.isAfter(finMesAnterior);
+                    } else {
+                        // Del 8 en adelante: se consideran videos del mes actual
+                        return !fechaVideo.isBefore(inicioMesActual) && !fechaVideo.isAfter(hoy);
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
+
     private PaymentDTO calculateRedactorPayment(User worker) {
         // Obtener los videos asociados al redactor
-        List<Video> videos = videoRepository.findByDescriptionContaining(worker.getCodigo());
+        List<Video> videos = filtrarVideosPorReglaDePago(
+                videoRepository.findByDescriptionContaining(worker.getCodigo())
+        );
 
         int videosTotales = videos.size();
         int videosCaidos = (int) videos.stream()
@@ -93,7 +144,9 @@ public class PaymentsService {
 
     private PaymentDTO calculateJefeRedaccionPayment(User worker) {
         // Obtener los videos asociados al jefe de redacción
-        List<Video> videos = videoRepository.findByDescriptionContaining(worker.getCodigo());
+        List<Video> videos = filtrarVideosPorReglaDePago(
+                videoRepository.findByDescriptionContaining(worker.getCodigo())
+        );
 
         int videosTotales = videos.size();
         int videosCaidos = (int) videos.stream()
@@ -111,11 +164,13 @@ public class PaymentsService {
                 .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) >= 0)
                 .map(video -> {
                     BigDecimal revenue = BigDecimal.valueOf(video.getEstimatedRevenue());
+                    BigDecimal pagoBase = BigDecimal.ONE;
                     BigDecimal pagoExtra = calculatePagoExtra(revenue);
                     BigDecimal bonoAdicional = calculateBonoAdicional(revenue);
-                    return revenue.multiply(BigDecimal.valueOf(0.97)) // Descuento del 3%
+                    return pagoBase
                             .add(pagoExtra)
-                            .add(bonoAdicional);
+                            .add(bonoAdicional)
+                            .multiply(BigDecimal.valueOf(0.97)); // Descuento del 3%
                 })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -163,7 +218,9 @@ public class PaymentsService {
     }
 
     private PaymentDTO calculateJefePrensaPayment(User worker) {
-        List<Video> videos = videoRepository.findByDescriptionContaining(worker.getCodigo());
+        List<Video> videos = filtrarVideosPorReglaDePago(
+                videoRepository.findByDescriptionContaining(worker.getCodigo())
+        );
 
         int videosTotales = videos.size();
         int videosCaidos = (int) videos.stream()
@@ -204,7 +261,9 @@ public class PaymentsService {
     }
 
     private PaymentDTO calculateJefeEntrevistasPayment(User worker) {
-        List<Video> videos = videoRepository.findByDescriptionContaining(worker.getCodigo());
+        List<Video> videos = filtrarVideosPorReglaDePago(
+                videoRepository.findByDescriptionContaining(worker.getCodigo())
+        );
 
         int videosTotales = videos.size();
         int videosCaidos = (int) videos.stream()
@@ -241,7 +300,9 @@ public class PaymentsService {
     }
 
     private PaymentDTO calculatePanelistaPayment(User worker) {
-        List<Video> videos = videoRepository.findByDescriptionContaining(worker.getCodigo());
+        List<Video> videos = filtrarVideosPorReglaDePago(
+                videoRepository.findByDescriptionContaining(worker.getCodigo())
+        );
 
         int videosTotales = videos.size();
         int videosCaidos = (int) videos.stream()

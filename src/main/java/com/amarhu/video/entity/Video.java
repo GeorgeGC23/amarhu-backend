@@ -35,8 +35,4 @@ public class Video {
 
     private String miniatura;
 
-    @Column(nullable = false, updatable = false)
-    private String createdAt;
-
-
 }

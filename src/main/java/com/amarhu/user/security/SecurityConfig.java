@@ -33,11 +33,13 @@ public class SecurityConfig {
                         "/api/auth/**",
                         "/api/user-requests/**",
                         "/api/scheduler/**",
-                        "/api/youtube/**"
+                        "/api/youtube/**",
+                        "/oauth2/**"  // Nuevo: Habilita OAuth2
                 ))  // Ignora CSRF en estos endpoints
                 .cors(cors -> {})  // Configuración de CORS externa
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
+                                "/",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
@@ -47,17 +49,24 @@ public class SecurityConfig {
                         .requestMatchers("/api/scheduler/**").permitAll()  // Público para el scheduler
                         .requestMatchers("/api/youtube/**").permitAll()  // Público para YouTube
                         .requestMatchers("/api/auth/**").permitAll()  // Login es público
+                        .requestMatchers("/oauth2/**").permitAll()  // Nuevo: Permitir OAuth2 login y callback
+                        .requestMatchers("/api/youtube/auth/**").permitAll()  // Nuevo: Endpoint de autenticación de YouTube
                         .anyRequest().authenticated()  // El resto requiere autenticación
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))  // Sin sesiones
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
-                        (request, response, authException) -> response.sendError(401, "Unauthorized")
+                        (request, response, authException) -> {
+                            if (request.getRequestURI().startsWith("/api/auth") || request.getRequestURI().startsWith("/swagger-ui")) {
+                                response.setStatus(200);
+                            } else {
+                                response.sendError(401, "Unauthorized");
+                            }
+                        }
                 ))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);  // Añade el filtro JWT
 
         return http.build();
     }
-
 
     @Bean
     public PasswordEncoder passwordEncoder() {

@@ -11,7 +11,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,17 +26,15 @@ public class ProductionLastMonthService {
     private static final BigDecimal REVENUE_THRESHOLD = BigDecimal.valueOf(10); // Umbral para videos caídos
     private static final BigDecimal TAX_PERCENTAGE = BigDecimal.valueOf(0.78); // Porcentaje de impuestos
     private static final BigDecimal PRODUCTION_COST = BigDecimal.valueOf(5.4); // Coste por video
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd"); // Formato de fecha
 
     public Production getTotalProductionForLastMonth() {
         // Obtener el rango de fechas del mes pasado
         YearMonth lastMonth = YearMonth.now().minusMonths(1);
-        String startDate = lastMonth.atDay(1).format(DATE_FORMATTER);
-        String endDate = lastMonth.atEndOfMonth().format(DATE_FORMATTER);
+        String startDate = lastMonth.atDay(1).toString(); // Utilizar toString() por defecto
+        String endDate = lastMonth.atEndOfMonth().toString(); // Utilizar toString() por defecto
 
-        // Filtrar videos del mes pasado
+        // Obtener todos los videos del mes pasado
         List<Video> videos = videoRepository.findByDateBetween(startDate, endDate).stream()
-                .filter(video -> isValidDateRange(video.getDate(), startDate, endDate))
                 .collect(Collectors.toList());
 
         // Calcular la producción total
@@ -79,17 +76,5 @@ public class ProductionLastMonthService {
         production.setDate(productionDate);
 
         return productionRepository.save(production);
-    }
-
-    private boolean isValidDateRange(String rawDate, String startDate, String endDate) {
-        try {
-            LocalDate videoDate = LocalDate.parse(rawDate, DATE_FORMATTER);
-            LocalDate start = LocalDate.parse(startDate, DATE_FORMATTER);
-            LocalDate end = LocalDate.parse(endDate, DATE_FORMATTER);
-            return (videoDate.isEqual(start) || videoDate.isAfter(start)) &&
-                    (videoDate.isEqual(end) || videoDate.isBefore(end));
-        } catch (Exception e) {
-            throw new RuntimeException("Error al procesar la fecha: " + rawDate, e);
-        }
     }
 }

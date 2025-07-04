@@ -13,7 +13,7 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
-    private final String SECRET_KEY = "B3k92jkLPwl+LnmLQ+3k+/OYnFJ1nLOIXzqW7YxlWZk=";  // ¡Cámbiala a algo más seguro!
+    private final String SECRET_KEY = "yN8q1k1YfJw/9gxOwlhIzG3I0k5dF5f6Mz5tPzq9nYnZdLg9ZBPEqznRb24ch4b7t5k2Wy26uLgYNj0aDsk4fw==";  // ¡Cámbiala a algo más seguro!
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -36,9 +36,14 @@ public class JwtUtil {
         return extractExpiration(token).before(new Date());
     }
 
-    public String generateToken(String username) {
-        Map<String, Object> claims = new HashMap<>();
-        return createToken(claims, username);
+    public String generateToken(String email, String role) {
+        return Jwts.builder()
+                .setSubject(email)
+                .claim("role", role)  // Incluir el rol en el payload del JWT
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 3600000))  // 1 hora de expiración
+                .signWith(SignatureAlgorithm.HS512, SECRET_KEY)
+                .compact();
     }
 
     private String createToken(Map<String, Object> claims, String subject) {

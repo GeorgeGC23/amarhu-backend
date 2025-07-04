@@ -13,5 +13,6 @@ public interface ProductionRepository extends JpaRepository<Production, Long> {
     // Buscar producciones en un rango de fechas
     List<Production> findByDateBetween(LocalDate startDate, LocalDate endDate);
 
+
     List<Production> findByUser(User user);
 }

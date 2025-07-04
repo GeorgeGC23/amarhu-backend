@@ -6,52 +6,48 @@ import com.amarhu.video.repository.VideoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
 public class FallenVideoService {
 
-    @Autowired
-    private VideoRepository videoRepository;
-
     private static final double REVENUE_THRESHOLD = 10.0;
 
-    public List<FallenVideoDTO> getFallenVideos() {
-        // Obtener todos los videos desde el repositorio
-        List<Video> videos = videoRepository.findAll();
+    private final VideoRepository videoRepository;
 
-        // Filtrar videos caídos y mapear al DTO
-        return videos.stream()
-                .filter(video -> video.getEstimatedRevenue() < REVENUE_THRESHOLD) // Filtro de videos caídos
-                .map(video -> {
-                    String formattedDate = formatDate(video.getDate());
-                    return new FallenVideoDTO(
-                            video.getVideoId(),
-                            video.getTitle(),
-                            video.getDescription(),
-                            formattedDate,
-                            video.getViews(),
-                            video.getEstimatedRevenue(),
-                            video.getEstimatedAdRevenue(),
-                            video.getViews(),
-                            video.getAverageViewDuration(),
-                            video.getRpm(),
-                            video.getMiniatura()
-                    );
-                })
-                .collect(Collectors.toList());
+    @Autowired
+    public FallenVideoService(VideoRepository videoRepository) {
+        this.videoRepository = videoRepository;
     }
 
-    private String formatDate(String rawDate) {
-        try {
-            SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd");
-            SimpleDateFormat outputFormat = new SimpleDateFormat("dd - MMMM - yyyy", Locale.ENGLISH);
-            return outputFormat.format(inputFormat.parse(rawDate));
-        } catch (Exception e) {
-            throw new RuntimeException("Error formateando la fecha: " + rawDate, e);
-        }
+    public List<FallenVideoDTO> getFallenVideos() {
+        // Obtiene la fecha actual y calcula el rango de fechas (mismo que VideoService)
+        LocalDate now = LocalDate.now();
+        LocalDate startOfCurrentMonth = now.withDayOfMonth(1);
+        LocalDate startOfPreviousMonth = startOfCurrentMonth.minusMonths(1);
+
+        // Busca los videos en el mismo rango que VideoService
+        List<Video> videos = videoRepository.findByDateBetween(startOfPreviousMonth.toString(), now.toString());
+
+        // Filtra los videos con ingresos por debajo del umbral y mapea al DTO
+        return videos.stream()
+                .filter(video -> video.getEstimatedRevenue() < REVENUE_THRESHOLD)
+                .map(video -> new FallenVideoDTO(
+                        video.getVideoId(),
+                        video.getTitle(),
+                        video.getDescription(),
+                        video.getDate(), // No formateamos la fecha, la dejamos tal cual
+                        video.getViews(),
+                        video.getEstimatedRevenue(),
+                        // Verificamos si getEstimatedAdRevenue() es null antes de usarlo
+                        video.getEstimatedAdRevenue() != null ? video.getEstimatedAdRevenue() : 0.0,  // Si es null, asignamos 0.0
+                        video.getViews(),
+                        video.getAverageViewDuration(),
+                        video.getRpm(),
+                        video.getMiniatura()
+                ))
+                .collect(Collectors.toList());
     }
 }

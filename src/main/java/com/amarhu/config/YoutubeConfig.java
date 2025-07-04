@@ -1,9 +1,8 @@
 package com.amarhu.config;
 
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.JsonFactory;
@@ -30,20 +29,18 @@ public class YoutubeConfig {
             "https://www.googleapis.com/auth/yt-analytics.readonly"
     );
 
-    /**
-     * Autentica al usuario y obtiene un token de acceso válido.
-     */
-    public Credential authorize() throws Exception {
-        // Crear el JSON dinámicamente usando variables de entorno
+    private final GoogleAuthorizationCodeFlow flow;
+
+    public YoutubeConfig() throws Exception {
         String clientSecretsJson = String.format("{\n" +
-                        "  \"installed\": {\n" +
+                        "  \"web\": {\n" +
                         "    \"client_id\": \"%s\",\n" +
                         "    \"project_id\": \"%s\",\n" +
                         "    \"auth_uri\": \"https://accounts.google.com/o/oauth2/auth\",\n" +
                         "    \"token_uri\": \"https://oauth2.googleapis.com/token\",\n" +
                         "    \"auth_provider_x509_cert_url\": \"https://www.googleapis.com/oauth2/v1/certs\",\n" +
                         "    \"client_secret\": \"%s\",\n" +
-                        "    \"redirect_uris\": [\"http://localhost:8008\"]\n" +
+                        "    \"redirect_uris\": [\"https://api.pa-reporte.com/oauth2/callback\"]\n" +
                         "  }\n" +
                         "}",
                 System.getenv("GOOGLE_CLIENT_ID"),
@@ -51,14 +48,10 @@ public class YoutubeConfig {
                 System.getenv("GOOGLE_CLIENT_SECRET")
         );
 
-        // Convertir el JSON dinámico a un InputStream
         ByteArrayInputStream clientSecretsStream = new ByteArrayInputStream(clientSecretsJson.getBytes());
-
-        // Cargar las credenciales
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(clientSecretsStream));
 
-        // Crear flujo de autorización
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+        this.flow = new GoogleAuthorizationCodeFlow.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 JSON_FACTORY,
                 clientSecrets,
@@ -66,28 +59,45 @@ public class YoutubeConfig {
         ).setDataStoreFactory(new FileDataStoreFactory(Paths.get(TOKENS_DIRECTORY_PATH).toFile()))
                 .setAccessType("offline")
                 .build();
+    }
 
-        // Intentar cargar credenciales existentes
-        Credential credential = flow.loadCredential("user");
-        if (credential == null || credential.getAccessToken() == null || credential.getExpiresInSeconds() <= 0) {
-            // Si no existen credenciales válidas, abrir el flujo de autorización en el navegador
-            credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver.Builder()
-                    .setPort(8008) // Puerto para escuchar la respuesta de Google
-                    .build()
-            ).authorize("user");
+    public GoogleAuthorizationCodeFlow getFlow() {
+        return flow;
+    }
+
+    /**
+     * Obtiene las credenciales si ya existen, o solicita una nueva autenticación.
+     */
+    public Credential authorize(String authCode) throws Exception {
+        if (authCode == null || authCode.isEmpty()) {
+            throw new IllegalArgumentException("Código de autenticación inválido. Debes iniciar sesión primero.");
         }
 
-        return credential;
+        return flow.createAndStoreCredential(
+                flow.newTokenRequest(authCode)
+                        .setRedirectUri("https://api.pa-reporte.com/oauth2/callback")
+                        .execute(),
+                "user"
+        );
+    }
+
+    /**
+     * Genera la URL de autenticación de Google.
+     */
+    public String getAuthUrl() {
+        return flow.newAuthorizationUrl()
+                .setRedirectUri("https://api.pa-reporte.com/oauth2/callback")
+                .build();
     }
 
     /**
      * Crea y devuelve un cliente YouTube autorizado.
      */
-    public YouTube getYouTubeService() throws Exception {
+    public YouTube getYouTubeService(Credential credential) throws Exception {
         return new YouTube.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 JSON_FACTORY,
-                authorize()
+                credential
         ).setApplicationName("AmarhuBackend")
                 .build();
     }
@@ -95,11 +105,11 @@ public class YoutubeConfig {
     /**
      * Crea y devuelve un cliente YouTubeAnalytics autorizado.
      */
-    public YouTubeAnalytics getYouTubeAnalyticsService() throws Exception {
+    public YouTubeAnalytics getYouTubeAnalyticsService(Credential credential) throws Exception {
         return new YouTubeAnalytics.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 JSON_FACTORY,
-                authorize()
+                credential
         ).setApplicationName("AmarhuBackend")
                 .build();
     }

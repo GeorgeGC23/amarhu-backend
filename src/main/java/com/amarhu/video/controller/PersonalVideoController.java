@@ -17,6 +17,6 @@ public class PersonalVideoController {
     // Endpoint para obtener los videos del redactor
     @GetMapping("/{userId}")
     public List<VideoDTO> getVideosForRedactor(@PathVariable Long userId) {
-        return personalVideoService.getVideosForRedactor(userId);
+        return personalVideoService.getVideosForUser(userId);
     }
 }

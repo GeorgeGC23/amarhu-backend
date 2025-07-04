@@ -18,9 +18,15 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/login")
+    @PostMapping(value = "/login", consumes = "application/json", produces = "application/json")
     public ResponseEntity<AuthResponse> authenticate(@RequestBody AuthRequest request) {
-        String jwtToken = authService.authenticate(request.getEmail(), request.getPassword());
-        return ResponseEntity.ok(new AuthResponse(jwtToken));
+        System.out.println("Email recibido: " + request.getEmail());
+        System.out.println("Password recibido: " + request.getPassword());
+
+        AuthResponse response = authService.authenticate(request.getEmail(), request.getPassword());
+        return ResponseEntity.ok(response);
     }
+
+
+
 }
