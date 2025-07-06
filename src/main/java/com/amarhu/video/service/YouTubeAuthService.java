@@ -11,7 +11,8 @@ public class YouTubeAuthService {
     @Autowired
     private YoutubeConfig youtubeConfig;
 
-    public Credential getCredential() throws Exception {
-        return youtubeConfig.authorize();
+    public Credential getCredential(String authCode) throws Exception {
+        return youtubeConfig.authorize(authCode);
     }
+
 }
