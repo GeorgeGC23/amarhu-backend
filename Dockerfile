@@ -1,17 +1,18 @@
-# Usa una imagen base de OpenJDK 17
+# Etapa 1: Build con Maven
+FROM maven:3.9.5-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
+
+# Etapa 2: Runtime con JDK Slim
 FROM openjdk:21-jdk-slim
-
-# Define una variable para el archivo JAR
-ARG JAR_FILE=target/amarhu-backend-0.0.1.jar
-
-# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia el archivo JAR al contenedor y lo renombra
-COPY ${JAR_FILE} app.jar
+# Copia el JAR compilado desde la etapa anterior
+COPY --from=build /app/target/amarhu-backend-0.0.1.jar app.jar
 
-# Copia el archivo del certificado al contenedor
+# Copia el certificado
 COPY src/main/resources/api.pa-reporte.p12 /app/api.pa-reporte.p12
 
-# Comando para ejecutar la aplicación con el certificado
+# Comando de inicio con configuración de certificado
 ENTRYPOINT ["java", "-Djavax.net.ssl.keyStore=/app/api.pa-reporte.p12", "-Djavax.net.ssl.keyStorePassword=123456", "-Djavax.net.ssl.keyStoreType=PKCS12", "-jar", "app.jar"]
