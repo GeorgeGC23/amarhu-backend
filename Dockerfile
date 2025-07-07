@@ -11,5 +11,7 @@ WORKDIR /app
 # Copia el JAR compilado desde la etapa anterior
 COPY --from=build /app/target/amarhu-backend-0.0.1.jar app.jar
 
+EXPOSE 8080
+
 # Comando de inicio con configuración de certificado
 ENTRYPOINT ["java", "-jar", "app.jar"]
