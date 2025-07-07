@@ -28,7 +28,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .requiresChannel(channel -> channel.anyRequest().requiresSecure())  // Fuerza HTTPS
+                //.requiresChannel(channel -> channel.anyRequest().requiresSecure())  // Fuerza HTTPS
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         "/api/auth/**",
                         "/api/user-requests/**",
