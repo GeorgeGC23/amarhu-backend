@@ -11,8 +11,5 @@ WORKDIR /app
 # Copia el JAR compilado desde la etapa anterior
 COPY --from=build /app/target/amarhu-backend-0.0.1.jar app.jar
 
-# Copia el certificado
-COPY src/main/resources/api.pa-reporte.p12 /app/api.pa-reporte.p12
-
 # Comando de inicio con configuración de certificado
-ENTRYPOINT ["java", "-Djavax.net.ssl.keyStore=/app/api.pa-reporte.p12", "-Djavax.net.ssl.keyStorePassword=123456", "-Djavax.net.ssl.keyStoreType=PKCS12", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
