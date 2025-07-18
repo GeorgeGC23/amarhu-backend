@@ -28,13 +28,22 @@ public class ProductionService {
     private static final BigDecimal PRODUCTION_COST = BigDecimal.valueOf(5.4); // Coste por video
 
     public Production calculateMonthlyProduction() {
-        // Obtener el rango de fechas del mes actual
+        // Rango del mes actual
         YearMonth currentMonth = YearMonth.now();
-        String startDate = currentMonth.atDay(1).toString(); // Primer día del mes
-        String endDate = currentMonth.atEndOfMonth().toString(); // Último día del mes
+        LocalDate startDate = currentMonth.atDay(1);
+        LocalDate endDate = currentMonth.atEndOfMonth();
 
-        // Obtener todos los videos del mes actual
-        List<Video> videos = videoRepository.findByDateBetween(startDate, endDate).stream()
+        // Obtener todos los videos y filtrar por fecha convertida a LocalDate
+        List<Video> videos = videoRepository.findAll().stream()
+                .filter(video -> {
+                    try {
+                        // Parsear fecha con zona horaria
+                        LocalDate videoDate = LocalDate.parse(video.getDate().substring(0, 10));
+                        return !videoDate.isBefore(startDate) && !videoDate.isAfter(endDate);
+                    } catch (Exception e) {
+                        return false; // Ignorar si no se puede parsear
+                    }
+                })
                 .collect(Collectors.toList());
 
         return calculateTotalProduction(videos, LocalDate.now());
@@ -57,9 +66,12 @@ public class ProductionService {
                 .map(video -> BigDecimal.valueOf(video.getEstimatedRevenue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Aplicar también impuestos a los videos caídos
+        BigDecimal totalCaidosMenosImpuestos = totalGeneradoPorCaidos.multiply(TAX_PERCENTAGE).setScale(2, RoundingMode.HALF_UP);
+
         BigDecimal costeTotalProduccion = BigDecimal.valueOf(totalVideos).multiply(PRODUCTION_COST);
 
-        BigDecimal gananciaNeta = gananciaMenosImpuestos.subtract(totalGeneradoPorCaidos);
+        BigDecimal gananciaNeta = gananciaMenosImpuestos.subtract(totalCaidosMenosImpuestos);
 
         // Crear entidad Production
         Production production = new Production();
@@ -71,7 +83,7 @@ public class ProductionService {
         production.setGananciaNeta(gananciaNeta);
         production.setCosteProduccion(PRODUCTION_COST.intValue());
         production.setCosteTotalProduccion(costeTotalProduccion);
-        production.setTotalGeneradoPorCaidos(totalGeneradoPorCaidos);
+        production.setTotalGeneradoPorCaidos(totalGeneradoPorCaidos); // Este campo sigue guardando el valor bruto
         production.setDate(productionDate); // Fecha actual
 
         return productionRepository.save(production);

@@ -2,7 +2,6 @@ package com.amarhu.video.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import org.w3c.dom.Text;
 
 @Entity
 @Data
