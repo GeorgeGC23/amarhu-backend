@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class FallenVideoDTO {
-    private String videoId;
+    private String id;
     private String title;
     private String description;
     private String date; // Fecha formateada
