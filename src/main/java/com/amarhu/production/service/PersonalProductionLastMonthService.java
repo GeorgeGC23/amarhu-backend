@@ -28,8 +28,9 @@ public class PersonalProductionLastMonthService {
 
     private static final BigDecimal REDACTOR_PERCENTAGE = BigDecimal.valueOf(16.6452);
     private static final BigDecimal EXCHANGE_RATE = BigDecimal.valueOf(3.62);
-    private static final BigDecimal MINIMUM_REVENUE = BigDecimal.valueOf(0.10); // Usa tu mismo mínimo
+    private static final BigDecimal MINIMUM_REVENUE = BigDecimal.valueOf(10);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final int DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT = 2;
 
     public PersonalProductionDTO getPersonalProductionLastMonth(Long userId) {
         User user = userRepository.findById(userId)
@@ -44,16 +45,25 @@ public class PersonalProductionLastMonthService {
                         && video.getDescription().contains(user.getCodigo()))
                 .collect(Collectors.toList());
 
+        LocalDate dateThresholdForFallen = lastMonth.atEndOfMonth().minusDays(DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT);
+
+
         int videosTotales = videos.size();
+
         int videosCaidos = (int) videos.stream()
-                .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) < 0)
+                .filter(video -> {
+                    if (!isBeforeOrEqualThreshold(video.getDate(), dateThresholdForFallen)) {
+                        return false;
+                    }
+
+                    return BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) < 0;
+                })
                 .count();
 
         BigDecimal gananciaTotal = videos.stream()
                 .map(video -> BigDecimal.valueOf(video.getEstimatedRevenue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calcular comision según rol
         BigDecimal comisionDolares = calculateCommissionByRole(user, videos);
         BigDecimal comisionSoles = comisionDolares.multiply(EXCHANGE_RATE);
 
@@ -66,6 +76,15 @@ public class PersonalProductionLastMonthService {
                 comisionDolares,
                 comisionSoles
         );
+    }
+
+    private boolean isBeforeOrEqualThreshold(String rawDate, LocalDate thresholdDate) {
+        try {
+            LocalDate videoDate = LocalDate.parse(rawDate.substring(0, 10), DATE_FORMATTER);
+            return videoDate.isBefore(thresholdDate) || videoDate.isEqual(thresholdDate);
+        } catch (Exception e) {
+            throw new RuntimeException("Error al procesar la fecha del video para el umbral: " + rawDate, e);
+        }
     }
 
     private boolean isWithinDateRange(String rawDate, String startDate, String endDate) {
@@ -149,8 +168,6 @@ public class PersonalProductionLastMonthService {
 
         return total;
     }
-
-    // Métodos auxiliares (idénticos a los de tu servicio de pagos):
 
     private BigDecimal calculatePagoExtra(BigDecimal estimatedRevenue) {
         if (estimatedRevenue.compareTo(BigDecimal.valueOf(20)) <= 0) {
