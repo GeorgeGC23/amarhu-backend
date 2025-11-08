@@ -31,7 +31,7 @@ public class PersonalProductionLastMonthService {
     private static final BigDecimal MINIMUM_REVENUE = BigDecimal.valueOf(10);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT = 2;
-
+    private static final BigDecimal TAX_DISCOUNT_FACTOR = BigDecimal.valueOf(0.78);
     public PersonalProductionDTO getPersonalProductionLastMonth(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
@@ -45,18 +45,42 @@ public class PersonalProductionLastMonthService {
                         && video.getDescription().contains(user.getCodigo()))
                 .collect(Collectors.toList());
 
-        LocalDate dateThresholdForFallen = lastMonth.atEndOfMonth().minusDays(DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT);
+        // 1. Determinar si estamos en el período de gracia (días 1 o 2 del mes actual)
+        final LocalDate currentDate = LocalDate.now();
+        final int currentDayOfMonth = currentDate.getDayOfMonth();
 
+        // Declaración como 'final' para que pueda ser usada en el stream/lambda
+        final boolean isGracePeriodActive = currentDayOfMonth <= DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT;
+
+        // 2. Declarar la variable de Umbral UNA SOLA VEZ
+        LocalDate threshold = lastMonth.atEndOfMonth();
+
+        if (isGracePeriodActive) {
+            // Solo reasignación si estamos en el período de gracia
+            threshold = lastMonth.atEndOfMonth().minusDays(DAYS_TO_EXCLUDE_FROM_FALLEN_COUNT);
+        }
+
+        // 3. Declarar el Umbral de Fecha como 'final' para usarlo en el lambda
+        final LocalDate dateThresholdForFallen = threshold;
 
         int videosTotales = videos.size();
 
+        // 4. Aplicar el filtro condicional de fecha
         int videosCaidos = (int) videos.stream()
                 .filter(video -> {
-                    if (!isBeforeOrEqualThreshold(video.getDate(), dateThresholdForFallen)) {
+                    boolean isFallenByRevenue = BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) < 0;
+
+                    if (!isFallenByRevenue) {
                         return false;
                     }
 
-                    return BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) < 0;
+                    // Si el período de gracia está ACTIVO, aplicamos el filtro de fecha
+                    if (isGracePeriodActive) {
+                        return isBeforeOrEqualThreshold(video.getDate(), dateThresholdForFallen);
+                    } else {
+                        // Si el período de gracia NO está activo (día 3 en adelante), contamos todos los que caen por monto
+                        return true;
+                    }
                 })
                 .count();
 
@@ -107,6 +131,8 @@ public class PersonalProductionLastMonthService {
         switch (role) {
             case REDACTOR:
                 total = videos.stream()
+                        // 🛑 CORRECCIÓN: Filtrar videos caídos (Estimated Revenue < $10)
+                        .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) >= 0)
                         .map(video -> BigDecimal.valueOf(video.getEstimatedRevenue()))
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         .multiply(REDACTOR_PERCENTAGE)
@@ -115,12 +141,14 @@ public class PersonalProductionLastMonthService {
 
             case JEFE_REDACCION:
                 total = videos.stream()
-                        .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) >= 0)
+                        .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) >= 0) // 1. Filtro con BRUTO
                         .map(video -> {
                             BigDecimal revenue = BigDecimal.valueOf(video.getEstimatedRevenue());
+                            BigDecimal revenueForBonus = revenue.multiply(TAX_DISCOUNT_FACTOR);
                             BigDecimal pagoBase = BigDecimal.ONE;
-                            BigDecimal pagoExtra = calculatePagoExtra(revenue);
-                            BigDecimal bonoAdicional = calculateBonoAdicional(revenue);
+                            BigDecimal pagoExtra = calculatePagoExtra(revenueForBonus);
+                            BigDecimal bonoAdicional = calculateBonoAdicional(revenueForBonus);
+
                             return pagoBase.add(pagoExtra).add(bonoAdicional)
                                     .multiply(BigDecimal.valueOf(0.97));
                         })
@@ -188,9 +216,11 @@ public class PersonalProductionLastMonthService {
     private BigDecimal calculateBonoAdicional(BigDecimal estimatedRevenue) {
         if (estimatedRevenue.compareTo(BigDecimal.valueOf(40)) > 0) {
             BigDecimal extraBonos = estimatedRevenue.subtract(BigDecimal.valueOf(40))
-                    .divide(BigDecimal.valueOf(40), RoundingMode.DOWN)
+                    .divide(BigDecimal.valueOf(40), 0, RoundingMode.DOWN)
                     .multiply(BigDecimal.valueOf(1.5));
-            return extraBonos.divide(BigDecimal.valueOf(3), RoundingMode.HALF_UP);
+
+            return extraBonos.divide(BigDecimal.valueOf(3), 10, RoundingMode.HALF_UP)
+                    .setScale(2, RoundingMode.HALF_UP);
         }
         return BigDecimal.ZERO;
     }

@@ -64,6 +64,7 @@ public class PersonalProductionService {
                 .collect(Collectors.toList());
 
         int videosTotales = videos.size();
+
         int videosCaidos = (int) videos.stream()
                 .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) < 0)
                 .count();
@@ -72,7 +73,12 @@ public class PersonalProductionService {
                 .map(video -> BigDecimal.valueOf(video.getEstimatedRevenue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal comisionDolares = gananciaTotal
+        BigDecimal gananciaParaComision = videos.stream()
+                .filter(video -> BigDecimal.valueOf(video.getEstimatedRevenue()).compareTo(MINIMUM_REVENUE) >= 0)
+                .map(video -> BigDecimal.valueOf(video.getEstimatedRevenue()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal comisionDolares = gananciaParaComision
                 .multiply(REDACTOR_PERCENTAGE)
                 .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
 
